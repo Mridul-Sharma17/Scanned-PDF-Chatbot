@@ -25,20 +25,20 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Cache directory setup
-CACHE_DIR = "cache_data"
-if not os.path.exists(CACHE_DIR):
-    os.makedirs(CACHE_DIR)
+# CACHE_DIR = "cache_data"
+# if not os.path.exists(CACHE_DIR):
+#     os.makedirs(CACHE_DIR)
 
 # Cache utility functions
-def save_cache_to_disk(cache_name: str, data):
-    cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
-    joblib.dump(data, cache_path)
+# def save_cache_to_disk(cache_name: str, data):
+#     cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
+#     joblib.dump(data, cache_path)
 
-def load_cache_from_disk(cache_name: str):
-    cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
-    if os.path.exists(cache_path):
-        return joblib.load(cache_path)
-    return None
+# def load_cache_from_disk(cache_name: str):
+#     cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
+#     if os.path.exists(cache_path):
+#         return joblib.load(cache_path)
+#     return None
 
 def get_embeddings():
     return GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
@@ -75,7 +75,6 @@ def get_pdf_text(pdf_docs):
             
     return text
 
-# Rest of the functions remain exactly the same
 def batch_process_chunks(chunks: List[str], batch_size: int = 5) -> List[str]:
     processed_chunks = []
     for i in range(0, len(chunks), batch_size):
@@ -89,35 +88,35 @@ def get_text_chunks(text: str) -> List[str]:
     chunks = text_splitter.split_text(text)
     return batch_process_chunks(chunks)
 
-@lru_cache(maxsize=1000)
-def cached_embedding(text_chunk: str) -> Tuple[float]:
-    try:
-        embeddings = get_embeddings()
-        time.sleep(1)
-        return tuple(embeddings.embed_query(text_chunk))
-    except Exception as e:
-        print(f"Error in embedding: {e}")
-        time.sleep(60)
-        return tuple(embeddings.embed_query(text_chunk))
+# @lru_cache(maxsize=1000)
+# def cached_embedding(text_chunk: str) -> Tuple[float]:
+#     try:
+#         embeddings = get_embeddings()
+#         time.sleep(1)
+#         return tuple(embeddings.embed_query(text_chunk))
+#     except Exception as e:
+#         print(f"Error in embedding: {e}")
+#         time.sleep(60)
+#         return tuple(embeddings.embed_query(text_chunk))
 
-def batch_create_embeddings(text_chunks: List[str], batch_size: int = 3):
-    all_embeddings = []
-    embeddings = get_embeddings()
+# def batch_create_embeddings(text_chunks: List[str], batch_size: int = 3):
+#     all_embeddings = []
+#     embeddings = get_embeddings()
 
-    for i in range(0, len(text_chunks), batch_size):
-        batch = text_chunks[i:i + batch_size]
-        try:
-            batch_embeddings = [cached_embedding(chunk) for chunk in batch]
-            all_embeddings.extend(batch_embeddings)
-            time.sleep(2)
-        except Exception as e:
-            print(f"Error in batch embedding: {e}")
-            time.sleep(60)
-            batch_embeddings = [cached_embedding(chunk) for chunk in batch]
-            all_embeddings.extend(batch_embeddings)
+#     for i in range(0, len(text_chunks), batch_size):
+#         batch = text_chunks[i:i + batch_size]
+#         try:
+#             batch_embeddings = [cached_embedding(chunk) for chunk in batch]
+#             all_embeddings.extend(batch_embeddings)
+#             time.sleep(2)
+#         except Exception as e:
+#             print(f"Error in batch embedding: {e}")
+#             time.sleep(60)
+#             batch_embeddings = [cached_embedding(chunk) for chunk in batch]
+#             all_embeddings.extend(batch_embeddings)
 
-    save_cache_to_disk('embeddings', all_embeddings)
-    return all_embeddings
+#     save_cache_to_disk('embeddings', all_embeddings)
+#     return all_embeddings
 
 def get_vector_store(text_chunks: List[str]):
     try:
@@ -142,7 +141,9 @@ def get_conversational_chain():
     - **New Lines:** Use double new lines (\\n\\n) to separate paragraphs and sections.
     - **Emphasis:** Use ** for bold and _ for italics to highlight important information.
 
-    If the answer is not available in the provided context, clearly state:
+    
+    If the question is generic and not specific  to the context, provide a general answer yourself.
+    If the answer is not available in the provided context and also not generic, clearly state:
     "The exact answer to this question is not available in the documentation. Here are some relevant details:"
     Then explain the relevant details in a clear and concise manner.
 
@@ -183,30 +184,39 @@ def user_input(user_question: str):
         time.sleep(60)
 
 def main():
-    st.set_page_config("Multiple PDF Chatbot")
-    st.header("Chat with PDFs")
+    st.set_page_config("PDF Chatbot📚")
+    st.header("Chat with PDFs📚")
    
     user_question = st.text_input("Ask a Question from the PDF Files")
     if user_question:
+        user_question += """
+        . Provide a comprehensive and informative explanation.
+        **Do not give information which is incorrect or incomplete.**
+        **Format the response clearly and concisely.**
+        **Ensure the answer is accurate and addresses all aspects of the question.**
+        **Use headings or bullet points to improve readability.**
+        **Include tables if they add clarity or structure to the answer.**
+        **If information is limited, state 'Based on the available information...' and provide the most relevant details.**
+    """
         user_input(user_question)
    
-    with st.sidebar:
-        st.title("Menu:")
-        pdf_docs = st.file_uploader(
-            "Upload your PDF Files and Click on the Submit & Process Button",
-            accept_multiple_files=True
-        )
+    # with st.sidebar:
+    #     st.title("Menu:")
+    #     pdf_docs = st.file_uploader(
+    #         "Upload your PDF Files and Click on the Submit & Process Button",
+    #         accept_multiple_files=True
+    #     )
        
-        if st.button("Submit & Process"):
-            with st.spinner("Processing..."):
-                try:
-                    raw_text = get_pdf_text(pdf_docs)
-                    text_chunks = get_text_chunks(raw_text)
-                    get_vector_store(text_chunks)
-                    st.success("Done")
-                except Exception as e:
-                    st.error(f"An error occurred during processing: {str(e)}")
-                    time.sleep(60)
+    #     if st.button("Submit & Process"):
+    #         with st.spinner("Processing..."):
+    #             try:
+    #                 raw_text = get_pdf_text(pdf_docs)
+    #                 text_chunks = get_text_chunks(raw_text)
+    #                 get_vector_store(text_chunks)
+    #                 st.success("Done")
+    #             except Exception as e:
+    #                 st.error(f"An error occurred during processing: {str(e)}")
+    #                 time.sleep(60)
 
 if __name__ == "__main__":
     main()
