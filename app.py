@@ -24,22 +24,6 @@ import google.generativeai as genai
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Cache directory setup
-# CACHE_DIR = "cache_data"
-# if not os.path.exists(CACHE_DIR):
-#     os.makedirs(CACHE_DIR)
-
-# Cache utility functions
-# def save_cache_to_disk(cache_name: str, data):
-#     cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
-#     joblib.dump(data, cache_path)
-
-# def load_cache_from_disk(cache_name: str):
-#     cache_path = os.path.join(CACHE_DIR, f"{cache_name}.pkl")
-#     if os.path.exists(cache_path):
-#         return joblib.load(cache_path)
-#     return None
-
 def get_embeddings():
     return GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
@@ -88,36 +72,6 @@ def get_text_chunks(text: str) -> List[str]:
     chunks = text_splitter.split_text(text)
     return batch_process_chunks(chunks)
 
-# @lru_cache(maxsize=1000)
-# def cached_embedding(text_chunk: str) -> Tuple[float]:
-#     try:
-#         embeddings = get_embeddings()
-#         time.sleep(1)
-#         return tuple(embeddings.embed_query(text_chunk))
-#     except Exception as e:
-#         print(f"Error in embedding: {e}")
-#         time.sleep(60)
-#         return tuple(embeddings.embed_query(text_chunk))
-
-# def batch_create_embeddings(text_chunks: List[str], batch_size: int = 3):
-#     all_embeddings = []
-#     embeddings = get_embeddings()
-
-#     for i in range(0, len(text_chunks), batch_size):
-#         batch = text_chunks[i:i + batch_size]
-#         try:
-#             batch_embeddings = [cached_embedding(chunk) for chunk in batch]
-#             all_embeddings.extend(batch_embeddings)
-#             time.sleep(2)
-#         except Exception as e:
-#             print(f"Error in batch embedding: {e}")
-#             time.sleep(60)
-#             batch_embeddings = [cached_embedding(chunk) for chunk in batch]
-#             all_embeddings.extend(batch_embeddings)
-
-#     save_cache_to_disk('embeddings', all_embeddings)
-#     return all_embeddings
-
 def get_vector_store(text_chunks: List[str]):
     try:
         embeddings = get_embeddings()
@@ -161,6 +115,7 @@ def get_conversational_chain():
 
 @lru_cache(maxsize=100)
 def cached_similarity_search(question: str):
+    new_db = None
     try:
         embeddings = get_embeddings()
         new_db = FAISS.load_local("faiss_vector_store", embeddings, allow_dangerous_deserialization=True)
@@ -168,7 +123,7 @@ def cached_similarity_search(question: str):
     except Exception as e:
         print(f"Error in similarity search: {e}")
         time.sleep(60)
-        return new_db.similarity_search(question)
+        return new_db.similarity_search(question) if new_db else []
 
 def user_input(user_question: str):
     try:
@@ -178,17 +133,23 @@ def user_input(user_question: str):
             {"input_documents": docs, "question": user_question},
             return_only_outputs=True
         )
-        st.write(response["output_text"])
+        return response["output_text"]
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
-        time.sleep(60)
+        return None
 
 def main():
-    st.set_page_config("PDF Chatbot📚")
-    st.header("Chat with PDFs📚")
-   
-    user_question = st.text_input("Ask a Question from the PDF Files")
+    # Initialize history in session state if not present
+    if "history" not in st.session_state:
+        st.session_state["history"] = []
+
+    st.set_page_config(page_title="Chat with AI")
+
+    # Sidebar input for chat
+    st.sidebar.title("Chat with AI")
+    user_question = st.sidebar.text_input("Ask Questions Here:")
     if user_question:
+        original_user_question = user_question
         user_question += """
         . Provide a comprehensive and informative explanation.
         **Do not give information which is incorrect or incomplete.**
@@ -197,26 +158,17 @@ def main():
         **Use headings or bullet points to improve readability.**
         **Include tables if they add clarity or structure to the answer.**
         **If information is limited, state 'Based on the available information...' and provide the most relevant details.**
-    """
-        user_input(user_question)
-   
-    # with st.sidebar:
-    #     st.title("Menu:")
-    #     pdf_docs = st.file_uploader(
-    #         "Upload your PDF Files and Click on the Submit & Process Button",
-    #         accept_multiple_files=True
-    #     )
-       
-    #     if st.button("Submit & Process"):
-    #         with st.spinner("Processing..."):
-    #             try:
-    #                 raw_text = get_pdf_text(pdf_docs)
-    #                 text_chunks = get_text_chunks(raw_text)
-    #                 get_vector_store(text_chunks)
-    #                 st.success("Done")
-    #             except Exception as e:
-    #                 st.error(f"An error occurred during processing: {str(e)}")
-    #                 time.sleep(60)
+        """
+        answer = user_input(user_question)
+        if answer:
+            # Append the Q&A to history
+            st.session_state["history"].append((original_user_question, answer))
+
+    # Display the conversation history
+    for idx, (q, a) in enumerate(st.session_state["history"], start=1):
+        q_html = f'<div style="text-align: right;">{q}</div>'
+        st.markdown("#### " + q_html, unsafe_allow_html=True)
+        st.markdown(a, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
