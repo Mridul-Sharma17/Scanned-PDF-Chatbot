@@ -101,7 +101,7 @@ def cached_similarity_search(question: str):
 def stream_response(model, prompt, answer_placeholder): # Keep: Streaming function
     """Streams the response from the model and displays it in Streamlit with letter-by-letter effect, returns full response."""
     full_response = ""
-    response_stream = model.generate_content(prompt, stream=True)
+    response_stream = model.generate_content(prompt, stream=True, generation_config = genai.GenerationConfig(temperature=0.5))
     for chunk in response_stream:
         text_chunk = chunk.text or ""
         for char in text_chunk:
@@ -115,13 +115,13 @@ def stream_response(model, prompt, answer_placeholder): # Keep: Streaming functi
 @lru_cache(maxsize=1) # Keep: Generative model function
 def get_generative_model():
     """Return a generative model."""
-    model = genai.GenerativeModel('gemini-2.0-flash-thinking-exp-1219') # or try 'gemini-1.5-flash' or 'gemini-pro'
+    model = genai.GenerativeModel('gemini-2.0-flash-thinking-exp') # or try 'gemini-1.5-flash' or 'gemini-pro'
     return model
 
 # --- Modified process_question Function (adapted from cheagpt, now with context) ---
 def process_question(question, answer_placeholder): # Keep: Process question function - now uses context and streaming
     """Generate an answer with streaming, now using document context."""
-    question_with_instructions = question + ". Provide a comprehensive and informative explanation. If there is any relevant link or reference, please provide that as well. **Do not give information which is incorrect or incomplete.** **Format the response clearly and concisely.** **Ensure the answer is accurate and addresses all aspects of the question.** **Avoid vague or generic responses.** **Strictly do not reference the source document explicitly (e.g., avoid phrases like 'the provided documentation', 'the document says' or 'text mentions' or similar meaning phrases) instead answer as if you are answering from you own knowledge, if any link or reference is given then give it enclosed in some text where when clicked, it opens the link, also show what it is for.** **Strictly Present the information naturally and independently, as if explaining from knowledge.** **Use headings or bullet points to improve readability.** **Include tables if they add clarity or structure to the answer.** **If information is limited, state 'Based on the available information...' and provide the most relevant details.**"
+    question_with_instructions = question + ". Provide a comprehensive and informative explanation. **Do not give information which is incorrect or incomplete.** **Format the response clearly and concisely.** **Ensure the answer is accurate and addresses all aspects of the question.** **Avoid vague or generic responses.** **Strictly do not reference the source document explicitly (e.g., avoid phrases like 'the provided documentation', 'the document says' or 'text mentions' or similar meaning phrases) instead answer as if you are answering from you own knowledge, it opens the link, also show what it is for.** **Strictly Present the information naturally and independently, as if explaining from knowledge.** **Use headings or bullet points to improve readability.** **Include tables if they add clarity or structure to the answer.** **If information is limited, state 'Based on the available information...' and provide the most relevant details.**"
 
     docs = cached_similarity_search(question) # Keep: Retrieve relevant docs using similarity search
     context_text = "\n\n".join([doc.page_content for doc in docs]) # Keep: Format context
